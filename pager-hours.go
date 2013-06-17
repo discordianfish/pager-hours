@@ -13,15 +13,20 @@ import (
 )
 
 var (
+	month  = beginningOfMonth(time.Now())
 	token  = flag.String("token", "", "PagerDuty token.")
 	domain = flag.String("domain", "", "PagerDuty subdomain/organization.")
-	since  = flag.Int("since", -1, "Calculate hours since X month ago.")
+	from   = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
+	to     = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
+	fromTime time.Time
+	toTime   time.Time
 	workers  map[string]worker
 	officeTZ map[string]holidays.Region
 	matchTier = regexp.MustCompile("tier=([0-9]*)")
 )
 
 const (
+	shortDate   = "2006-01-02"
 	weekday     = "weekday"
 	saturday    = "saturday"
 	sunday      = "sunday"
@@ -45,18 +50,31 @@ type worker struct {
 
 func init() {
 	flag.Parse()
+
 	if *token == "" || *domain == "" {
 		log.Fatalf("pager-hours -token=<your-token> -domain=<subdomain/organization>")
 	}
-	if *since >= 0 {
-		log.Fatalf("Dude, I can't look into the future! -since takes negativ numbers only.")
+
+	var err error
+	fromTime, err = time.Parse(shortDate, *from)
+	if err != nil {
+		log.Fatalf("Please provide a valid start date (format: %s)", shortDate)
 	}
+	toTime, err = time.Parse(shortDate, *to)
+	if err != nil {
+		log.Fatalf("Please provide a valid end date (format: %s)", shortDate)
+	}
+
 	workers = make(map[string]worker)
 	officeTZ = map[string]holidays.Region{
 		"Berlin": holidays.Berlin,
 		"Sofia": holidays.Bulgaria,
 		"Pacific Time (US & Canada)": holidays.California,
 	}
+}
+
+func beginningOfMonth(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
 }
 
 func bucketFor(t time.Time, user worker) string {
@@ -81,11 +99,12 @@ func bucketFor(t time.Time, user worker) string {
 
 func main() {
 	pd := pagerduty.New(*domain, *token)
-	now := time.Now()
 	schedules, err := pd.GetSchedules()
 	if err != nil {
 		log.Fatalf("Couldn't get Schedules: %s", err)
 	}
+
+	log.Printf("Calculating pagerduty hours between %s and %s", *from, *to)
 
 	for _, schedule := range schedules {
 		matches := matchTier.FindStringSubmatch(schedule.Name)
@@ -97,7 +116,7 @@ func main() {
 		if err != nil {
 			log.Printf("Skipping %s because tier '%s' is not a number.", schedule.Name, matches[1])
 		}
-		entries, err := pd.GetScheduleEntries(schedule.Id, now.AddDate(0, *since, 0), now)
+		entries, err := pd.GetScheduleEntries(schedule.Id, fromTime, toTime)
 		if err != nil {
 			log.Fatalf("Couldn't get schedule entries for %s: %s", schedule.Id, err)
 		}
