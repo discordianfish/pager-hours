@@ -91,7 +91,7 @@ func bucketFor(t time.Time, user worker) string {
 		return saturday
 	}
 
-	if t.Hour() > officeStart && t.Hour() < officeEnd {
+	if t.Hour() >= officeStart && t.Hour() < officeEnd {
 		return office
 	}
 	return weekday
@@ -134,8 +134,8 @@ func main() {
 					}
 
 					workers[entry.User.Email] = worker{
-						email:    entry.User.Email,
-						location: time.FixedZone(puser.TimeZone, int(puser.GmtOffset.Seconds())),
+						email:    puser.Email,
+						location: puser.Location,
 						region:   region,
 						workload: make(map[string]workload),
 					}
