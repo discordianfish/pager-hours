@@ -13,15 +13,15 @@ import (
 )
 
 var (
-	month  = beginningOfMonth(time.Now())
-	token  = flag.String("token", "", "PagerDuty token.")
-	domain = flag.String("domain", "", "PagerDuty subdomain/organization.")
-	from   = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
-	to     = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
-	fromTime time.Time
-	toTime   time.Time
-	workers  map[string]worker
-	officeTZ map[string]holidays.Region
+	month     = beginningOfMonth(time.Now())
+	token     = flag.String("token", "", "PagerDuty token.")
+	domain    = flag.String("domain", "", "PagerDuty subdomain/organization.")
+	from      = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
+	to        = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
+	fromTime  time.Time
+	toTime    time.Time
+	workers   map[string]worker
+	officeTZ  map[string]holidays.Region
 	matchTier = regexp.MustCompile("tier=([0-9]*)")
 )
 
@@ -68,7 +68,7 @@ func init() {
 	workers = make(map[string]worker)
 	officeTZ = map[string]holidays.Region{
 		"Berlin": holidays.Berlin,
-		"Sofia": holidays.Bulgaria,
+		"Sofia":  holidays.Bulgaria,
 		"Pacific Time (US & Canada)": holidays.California,
 	}
 }
@@ -141,22 +141,38 @@ func main() {
 					}
 				}
 
-				user := workers[entry.User.Email];
+				user := workers[entry.User.Email]
 				currentLocal := current.In(user.location) // local time for the user working that hour
 				bucket := bucketFor(currentLocal, user)
 				if _, ok := user.workload[bucket]; !ok {
 					user.workload[bucket] = workload{tier: tier}
 				}
-				user.workload[bucket] = workload{tier: tier, hours: workers[entry.User.Email].workload[bucket].hours + 1}
+				// TODO: Fixme, use correct tier
+				user.workload[bucket] = workload{tier: 1, hours: workers[entry.User.Email].workload[bucket].hours + 1}
 				current = current.Add(1 * time.Hour)
 			}
 		}
 	}
 	csvw := csv.NewWriter(os.Stdout)
+	csvw.Write([]string{
+		"Email",
+		"Time zone",
+		"Office location",
+		"Weekday hours",
+		"Saturday hours",
+		"Sunday hours",
+		"Holiday hours",
+	})
 	for _, worker := range workers {
-		for bucket, workload := range worker.workload {
-			csvw.Write([]string{worker.email, worker.location.String(), string(worker.region), strconv.Itoa(workload.tier), bucket, strconv.Itoa(workload.hours)})
-		}
+		csvw.Write([]string{
+			worker.email,
+			worker.location.String(),
+			string(worker.region),
+			strconv.Itoa(worker.workload[weekday].hours),
+			strconv.Itoa(worker.workload[saturday].hours),
+			strconv.Itoa(worker.workload[sunday].hours),
+			strconv.Itoa(worker.workload[holiday].hours),
+		})
 	}
 	csvw.Flush()
 }
