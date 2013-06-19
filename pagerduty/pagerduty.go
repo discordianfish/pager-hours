@@ -55,7 +55,7 @@ type pdUserDetails struct {
 	Email     string `json:"email"`
 	Name      string `json:"name"`
 	TimeZone  string `json:"time_zone"`
-	GmtOffset time.Duration
+	Location  *time.Location
 }
 
 type pagerDuty struct {
@@ -107,11 +107,16 @@ func (pd *pagerDuty) GetUser(id string) (pdUserDetails, error) {
 		return pdUserDetails{}, fmt.Errorf("Couldn't unmarshal response: %s", err)
 	}
 	user := pdu.User
-	offset, ok := gmtOffset[user.TimeZone]
+	locationName, ok := ianaLocation[user.TimeZone]
 	if !ok {
-		return pdUserDetails{}, fmt.Errorf("Unknown pagerduty time zone %s", user.TimeZone)
+		return pdUserDetails{}, fmt.Errorf("Timezone %s couldn't be mapped to a location", user.TimeZone)
 	}
-	user.GmtOffset = offset
+	location, err := time.LoadLocation(locationName)
+	if err != nil {
+		return pdUserDetails{}, fmt.Errorf("Location %s couldn't be loaded", locationName)
+	}
+	user.Location = location
+
 	return user, nil
 }
 
