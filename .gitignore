@@ -24,4 +24,4 @@ _testmain.go
 # Vim
 *.swp
 # Repo specific
-*.csv
+/*.csv
