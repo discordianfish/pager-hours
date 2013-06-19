@@ -91,7 +91,7 @@ func bucketFor(t time.Time, user worker) string {
 		return saturday
 	}
 
-	if t.Hour() > officeStart && t.Hour() < officeEnd {
+	if t.Hour() >= officeStart && t.Hour() < officeEnd {
 		return office
 	}
 	return weekday
