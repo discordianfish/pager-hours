@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	apiUrl     = "https://%s.pagerduty.com/api/v1/"
+	apiUrl     = "https://%s.pagerduty.com/api/v1"
 	dateLayout = "02-01-2006"
 )
 
