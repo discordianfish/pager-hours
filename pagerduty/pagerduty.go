@@ -51,11 +51,11 @@ type pdUser struct {
 }
 
 type pdUserDetails struct {
-	Id        string `json:"id"`
-	Email     string `json:"email"`
-	Name      string `json:"name"`
-	TimeZone  string `json:"time_zone"`
-	Location  *time.Location
+	Id       string `json:"id"`
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	TimeZone string `json:"time_zone"`
+	Location *time.Location
 }
 
 type pagerDuty struct {
