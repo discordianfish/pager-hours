@@ -31,20 +31,18 @@ type holiday struct {
 }
 
 func Holiday(t time.Time, r Region) (holiday, error) {
-	dt := t.In(time.UTC)
 	switch r {
 	case Berlin:
-		return holidayBerlin(dt)
+		return holidayBerlin(t)
 	case Bulgaria:
-		return holidayBulgaria(dt)
+		return holidayBulgaria(t)
 	case California:
-		return holidayCalifornia(dt)
+		return holidayCalifornia(t)
 	}
 	return holiday{}, errors.New("Region not supported")
 }
 
-func holidayBerlin(dt time.Time) (holiday, error) {
-	t := dt.Truncate(24 * time.Hour)
+func holidayBerlin(t time.Time) (holiday, error) {
 	// fixed
 	if t.Day() == 1 && t.Month() == time.January {
 		return holiday{Name: "New Year's Day"}, nil
