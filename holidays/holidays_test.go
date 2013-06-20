@@ -47,9 +47,10 @@ func compareToFixtures(region holidays.Region, file string) error {
 		if err != nil {
 			return fmt.Errorf("Couldn't parse fixtures: %s", err)
 		}
-		holiday, err := holidays.Holiday(dt, region)
+		t := dt.Add(5 * time.Hour)
+		holiday, err := holidays.Holiday(t, region)
 		if err != nil {
-			return fmt.Errorf("%s is supposed to be a holiday but library disagrees", dt)
+			return fmt.Errorf("%s is supposed to be a holiday but library disagrees", t)
 		}
 
 		if holiday.Name != day[1] {
