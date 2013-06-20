@@ -31,13 +31,15 @@ type holiday struct {
 }
 
 func Holiday(t time.Time, r Region) (holiday, error) {
+	day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+
 	switch r {
 	case Berlin:
-		return holidayBerlin(t)
+		return holidayBerlin(day)
 	case Bulgaria:
-		return holidayBulgaria(t)
+		return holidayBulgaria(day)
 	case California:
-		return holidayCalifornia(t)
+		return holidayCalifornia(day)
 	}
 	return holiday{}, errors.New("Region not supported")
 }
@@ -90,9 +92,7 @@ func holidayBerlin(t time.Time) (holiday, error) {
 	return holiday{}, NoHoliday
 }
 
-func holidayCalifornia(dt time.Time) (holiday, error) {
-	t := dt.Truncate(24 * time.Hour)
-
+func holidayCalifornia(t time.Time) (holiday, error) {
 	// US-wide
 	if t.Day() == 1 && t.Month() == time.January {
 		return holiday{Name: "New Year's Day"}, nil
@@ -145,9 +145,7 @@ func holidayCalifornia(dt time.Time) (holiday, error) {
 	return holiday{}, NoHoliday
 }
 
-func holidayBulgaria(dt time.Time) (holiday, error) {
-	t := dt.Truncate(24 * time.Hour)
-
+func holidayBulgaria(t time.Time) (holiday, error) {
 	easter, ok := orthodoxEaster[t.Year()]
 	if !ok {
 		return holiday{}, fmt.Errorf("Don't know orthodox easter for year %d", t.Year())
@@ -224,7 +222,7 @@ func holidayBulgaria(dt time.Time) (holiday, error) {
 func nthDay(t time.Time) (n int) {
 	cDay := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
 
-	for cDay.UnixNano() <= t.UnixNano() {
+	for cDay.Before(t) || cDay.Equal(t) {
 		if cDay.Weekday() == t.Weekday() {
 			n++
 		}
@@ -236,7 +234,7 @@ func nthDay(t time.Time) (n int) {
 func nthDayRev(t time.Time) (n int) {
 	cDay := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, t.Location()).AddDate(0, 0, -1) // last day in Month
 
-	for cDay.UnixNano() >= t.UnixNano() {
+	for cDay.After(t) || cDay.Equal(t) {
 		if cDay.Weekday() == t.Weekday() {
 			n++
 		}
