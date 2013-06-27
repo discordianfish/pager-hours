@@ -7,22 +7,20 @@ import (
 	"github.com/discordianfish/pager-hours/pagerduty"
 	"log"
 	"os"
-	"regexp"
 	"strconv"
 	"time"
 )
 
 var (
-	month     = beginningOfMonth(time.Now())
-	token     = flag.String("token", "", "PagerDuty token.")
-	domain    = flag.String("domain", "", "PagerDuty subdomain/organization.")
-	from      = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
-	to        = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
-	schedule  = flag.String("schedule", "", "List schedules.")
-	fromTime  time.Time
-	toTime    time.Time
-	officeTZ  map[string]holidays.Region
-	matchTier = regexp.MustCompile("tier=([0-9]*)")
+	month    = beginningOfMonth(time.Now())
+	token    = flag.String("token", "", "PagerDuty token.")
+	domain   = flag.String("domain", "", "PagerDuty subdomain/organization.")
+	from     = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
+	to       = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
+	schedule = flag.String("schedule", "", "List schedules.")
+	fromTime time.Time
+	toTime   time.Time
+	officeTZ map[string]holidays.Region
 )
 
 const (
@@ -36,13 +34,8 @@ const (
 	officeEnd   = 18
 )
 
-type workload struct {
-	hours int
-}
-
 type worker struct {
 	email    string
-	workload map[string]workload
 	location *time.Location
 	region   holidays.Region
 }
@@ -118,58 +111,66 @@ func main() {
 		"Time Zone",
 		"Location",
 		"Type",
-		"Hours",
+		"Hours On-Call",
 	})
+
+	day := map[worker]map[string]int{}
 	for _, entry := range entries {
 		current := entry.Start
 		for current.Before(entry.End) {
-			if _, ok := workers[entry.User.Email]; !ok {
-				puser, err := pd.GetUser(entry.User.Id)
-				if err != nil {
-					log.Fatalf("Couldn't get user %s: %s", entry.User.Id, err)
-				}
-				region, ok := officeTZ[puser.TimeZone]
-				if !ok {
-					log.Fatalf("No office in %s known", puser.TimeZone)
-				}
-
-				workers[entry.User.Email] = worker{
-					email:    puser.Email,
-					location: puser.Location,
-					region:   region,
-					workload: make(map[string]workload),
-				}
+			email := entry.User.Email
+			if _, ok := workers[email]; !ok {
+				workers[email] = getUser(pd, entry.User.Id)
 			}
 
-			user := workers[entry.User.Email]
+			user := workers[email]
+			if _, ok := day[user]; !ok {
+				day[user] = map[string]int{}
+			}
+
 			currentLocal := current.In(user.location) // local time for the user working that hour
 			bucket := bucketFor(currentLocal, user)
-
-			if _, ok := user.workload[bucket]; !ok {
-				user.workload[bucket] = workload{}
-			}
-			user.workload[bucket] = workload{hours: workers[entry.User.Email].workload[bucket].hours + 1}
+			day[user][bucket]++
 
 			next := current.Add(1 * time.Hour)
-
 			if next.Day() != current.Day() {
-				for _, worker := range workers {
-					for bucket, workload := range worker.workload {
+				for user, buckets := range day {
+					for bucket, hours := range buckets {
+						if hours == 0 {
+							continue
+						}
 						csvw.Write([]string{
 							current.Format(shortDate),
-							worker.email,
-							worker.location.String(),
-							string(worker.region),
+							user.email,
+							user.location.String(),
+							string(user.region),
 							bucket,
-							strconv.Itoa(workload.hours),
+							strconv.Itoa(hours),
 						})
 						csvw.Flush()
-						delete(worker.workload, bucket)
+						day[user][bucket] = 0
 					}
 				}
 			}
 			current = next
 		}
+	}
+}
+
+func getUser(pd pagerduty.PagerDuty, id string) worker {
+	puser, err := pd.GetUser(id)
+	if err != nil {
+		log.Fatalf("Couldn't get user %s: %s", id, err)
+	}
+	region, ok := officeTZ[puser.TimeZone]
+	if !ok {
+		log.Fatalf("No office in %s known", puser.TimeZone)
+	}
+
+	return worker{
+		email:    puser.Email,
+		location: puser.Location,
+		region:   region,
 	}
 }
 

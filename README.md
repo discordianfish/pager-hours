@@ -12,13 +12,9 @@ This tool helps with that.
 - Add an API client in pagerduty
 - Add "tier=<Num>" to the name of the on call schedules you want to report for
 
+## Sum via Google Spreadsheet
 
-        ./pager-hours -token=<token> -domain=<subdomain>
-        user@example.com,Pacific Time (US & Canada),California,1,sunday,72
-        user@example.com,Pacific Time (US & Canada),California,1,weekday,239
-        user@example.com,Pacific Time (US & Canada),California,1,saturday,48
-        user@example.com,Pacific Time (US & Canada),California,1,holiday,8
-
+        =QUERY('2013-05'!A:F, "select B, E, sum(F) group by B, E")
 
 ## Known issues
 This tool has a lot of limitations and assumptions.
