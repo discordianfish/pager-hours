@@ -58,12 +58,12 @@ type pdUserDetails struct {
 	Location  *time.Location
 }
 
-type pagerDuty struct {
+type PagerDuty struct {
 	token string
 	url   string
 }
 
-func New(domain string, token string) (pd pagerDuty) {
+func New(domain string, token string) (pd PagerDuty) {
 	pd.token = token
 	pd.url = fmt.Sprintf(apiUrl, domain)
 
@@ -71,7 +71,7 @@ func New(domain string, token string) (pd pagerDuty) {
 }
 
 //FIXME: pagination
-func (pd *pagerDuty) getBody(path string, params url.Values) (body []byte, err error) {
+func (pd *PagerDuty) getBody(path string, params url.Values) (body []byte, err error) {
 	url := fmt.Sprintf("%s/%s?%s", pd.url, path, params.Encode())
 	client := &http.Client{}
 
@@ -96,7 +96,7 @@ func (pd *pagerDuty) getBody(path string, params url.Values) (body []byte, err e
 	return body, err
 }
 
-func (pd *pagerDuty) GetUser(id string) (pdUserDetails, error) {
+func (pd *PagerDuty) GetUser(id string) (pdUserDetails, error) {
 	body, err := pd.getBody(fmt.Sprintf("users/%s", id), url.Values{})
 	if err != nil {
 		return pdUserDetails{}, fmt.Errorf("Couldn't request user: %s", err)
@@ -120,7 +120,7 @@ func (pd *pagerDuty) GetUser(id string) (pdUserDetails, error) {
 	return user, nil
 }
 
-func (pd *pagerDuty) GetSchedules() ([]pdSchedule, error) {
+func (pd *PagerDuty) GetSchedules() ([]pdSchedule, error) {
 	body, err := pd.getBody("schedules", url.Values{})
 	if err != nil {
 		return []pdSchedule{}, fmt.Errorf("Couldn't request schedules: %s", err)
@@ -136,7 +136,7 @@ func (pd *pagerDuty) GetSchedules() ([]pdSchedule, error) {
 	return pds.Schedules, err
 }
 
-func (pd *pagerDuty) GetScheduleEntries(id string, since time.Time, until time.Time) ([]pdScheduleEntries, error) {
+func (pd *PagerDuty) GetScheduleEntries(id string, since time.Time, until time.Time) ([]pdScheduleEntries, error) {
 	params := url.Values{}
 	params.Set("since", since.Format(dateLayout))
 	params.Set("until", until.Format(dateLayout))
