@@ -30,8 +30,8 @@ var (
 		"Location",
 		"Type",
 		"Hours On-Call",
-		"Incidents/Day",
-		"Incidents/Night",
+		"Hours with Incidents/Day",
+		"Hours with Incidents/Night",
 		"Additional Hours/Day",
 		"Additional Hours/Night",
 	}
