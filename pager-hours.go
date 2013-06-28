@@ -17,27 +17,54 @@ var (
 	domain   = flag.String("domain", "", "PagerDuty subdomain/organization.")
 	from     = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
 	to       = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
-	schedule = flag.String("schedule", "", "List schedules.")
+	schedule = flag.String("schedule", "", "Schedules to get on-call hours from")
+	policy   = flag.String("policy", "", "Escalation policy to get working hours from")
 	fromTime time.Time
 	toTime   time.Time
 	officeTZ map[string]holidays.Region
+
+	csvHeaders = []string{
+		"Date",
+		"User",
+		"Time Zone",
+		"Location",
+		"Type",
+		"Hours On-Call",
+		"Incidents/Day",
+		"Incidents/Night",
+		"Additional Hours/Day",
+		"Additional Hours/Night",
+	}
 )
 
 const (
-	shortDate   = "2006-01-02"
-	weekday     = "weekday"
-	saturday    = "saturday"
-	sunday      = "sunday"
-	holiday     = "holiday"
+	shortDate = "2006-01-02"
+
+	weekday  = "weekday"
+	saturday = "saturday"
+	sunday   = "sunday"
+	holiday  = "holiday"
+
 	office      = "officehours"
 	officeStart = 10
 	officeEnd   = 18
+
+	day        = "day"
+	night      = "night"
+	nightStart = 0
+	nightEnd   = 8
 )
 
 type worker struct {
 	email    string
 	location *time.Location
 	region   holidays.Region
+}
+
+type workload struct {
+	oncall         int
+	incidents      int
+	incidentsNight int
 }
 
 func init() {
@@ -98,6 +125,29 @@ func main() {
 		os.Exit(0)
 	}
 
+	if *policy == "" {
+		//listEscalationPolicies(pd)
+		os.Exit(0)
+	}
+
+	log.Println("- Getting all incidents (this can take some time)")
+	incidents, err := pd.GetIncidents(fromTime, toTime)
+	if err != nil {
+		log.Fatalf("Couldn't get incidents: %s", err)
+	}
+
+	incidentMap := map[string]map[int][]pagerduty.Incident{}
+	for _, incident := range *incidents {
+		if incident.EscalationPolicy.Id != *policy {
+			continue
+		}
+		c := incident.CreatedOn
+		if _, ok := incidentMap[c.Format(shortDate)]; !ok {
+			incidentMap[c.Format(shortDate)] = map[int][]pagerduty.Incident{}
+		}
+		incidentMap[c.Format(shortDate)][c.Hour()] = append(incidentMap[c.Format(shortDate)][c.Hour()], incident)
+	}
+
 	entries, err := pd.GetScheduleEntries(*schedule, fromTime, toTime)
 	if err != nil {
 		log.Fatalf("Couldn't get schedule entries for %s: %s", *schedule, err)
@@ -105,16 +155,11 @@ func main() {
 
 	workers := make(map[string]worker)
 	csvw := csv.NewWriter(os.Stdout)
-	csvw.Write([]string{
-		"Date",
-		"User",
-		"Time Zone",
-		"Location",
-		"Type",
-		"Hours On-Call",
-	})
+	csvw.Write(csvHeaders)
 
-	day := map[worker]map[string]int{}
+	day := map[worker]map[string]workload{}
+	// work := map[worker]map[string]map[string]int{}
+
 	for _, entry := range entries {
 		current := entry.Start
 		for current.Before(entry.End) {
@@ -125,18 +170,31 @@ func main() {
 
 			user := workers[email]
 			if _, ok := day[user]; !ok {
-				day[user] = map[string]int{}
+				day[user] = map[string]workload{}
 			}
 
 			currentLocal := current.In(user.location) // local time for the user working that hour
 			bucket := bucketFor(currentLocal, user)
-			day[user][bucket]++
+
+			work := day[user][bucket]
+			work.oncall++
+
+			incidents := incidentMap[current.Format(shortDate)][current.Hour()]
+
+			if len(incidents) > 0 {
+				if current.Hour() >= nightStart && current.Hour() < nightEnd {
+					work.incidentsNight++
+				} else {
+					work.incidents++
+				}
+			}
+			day[user][bucket] = work
 
 			next := current.Add(1 * time.Hour)
 			if next.Day() != current.Day() {
 				for user, buckets := range day {
-					for bucket, hours := range buckets {
-						if hours == 0 {
+					for bucket, work := range buckets {
+						if work.oncall == 0 && work.incidents == 0 && work.incidentsNight == 0 {
 							continue
 						}
 						csvw.Write([]string{
@@ -145,10 +203,13 @@ func main() {
 							user.location.String(),
 							string(user.region),
 							bucket,
-							strconv.Itoa(hours),
+							strconv.Itoa(work.oncall),
+							strconv.Itoa(work.incidents),
+							strconv.Itoa(work.incidentsNight),
+							"0", "0",
 						})
 						csvw.Flush()
-						day[user][bucket] = 0
+						day[user][bucket] = workload{}
 					}
 				}
 			}
