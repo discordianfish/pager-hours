@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/csv"
 	"flag"
+	"fmt"
 	"github.com/discordianfish/pager-hours/holidays"
 	"github.com/discordianfish/pager-hours/pagerduty"
 	"log"
@@ -17,8 +18,7 @@ var (
 	domain   = flag.String("domain", "", "PagerDuty subdomain/organization.")
 	from     = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
 	to       = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
-	schedule = flag.String("schedule", "", "Schedules to get on-call hours from")
-	policy   = flag.String("policy", "", "Escalation policy to get working hours from")
+	policyId = flag.String("policy", "", "Escalation policy to get on call hours and incidents from")
 	fromTime time.Time
 	toTime   time.Time
 	officeTZ map[string]holidays.Region
@@ -117,28 +117,35 @@ func bucketFor(t time.Time, user worker) string {
 
 func main() {
 	pd := pagerduty.New(*domain, *token)
-
-	log.Printf("Calculating pagerduty hours between %s and %s", *from, *to)
-
-	if *schedule == "" {
-		listSchedules(pd)
+	if *policyId == "" {
+		fmt.Println("No policy (-policy=abc) specified, available policies:")
+		listEscalationPolicies(pd)
 		os.Exit(0)
 	}
 
-	if *policy == "" {
-		//listEscalationPolicies(pd)
-		os.Exit(0)
+	policy, err := pd.GetEscalationPolicy(*policyId)
+	if err != nil {
+		log.Fatalf("Couldn't get escalation policy: %s", err)
+	}
+	log.Printf("Calculating hours for %s between %s and %s", policy.Name, *from, *to)
+	schedule := policy.Rules[0].Object // TODO: Verify this is sorted right
+	log.Printf("- Using schedule %s", schedule.Name)
+
+	serviceIds := []string{}
+	for _, service := range policy.Services {
+		log.Printf("-- service %s", service.Name)
+		serviceIds = append(serviceIds, service.Id)
 	}
 
-	log.Println("- Getting all incidents (this can take some time)")
-	incidents, err := pd.GetIncidents(fromTime, toTime)
+	log.Println("- Getting all incidents for services")
+	incidents, err := pd.GetIncidents(fromTime, toTime, serviceIds)
 	if err != nil {
 		log.Fatalf("Couldn't get incidents: %s", err)
 	}
 
 	incidentMap := map[string]map[int][]pagerduty.Incident{}
 	for _, incident := range *incidents {
-		if incident.EscalationPolicy.Id != *policy {
+		if incident.EscalationPolicy.Id != *policyId {
 			continue
 		}
 		c := incident.CreatedOn
@@ -148,9 +155,10 @@ func main() {
 		incidentMap[c.Format(shortDate)][c.Hour()] = append(incidentMap[c.Format(shortDate)][c.Hour()], incident)
 	}
 
-	entries, err := pd.GetScheduleEntries(*schedule, fromTime, toTime)
+	log.Println("- Getting entries for schedule")
+	entries, err := pd.GetScheduleEntries(schedule.Id, fromTime, toTime)
 	if err != nil {
-		log.Fatalf("Couldn't get schedule entries for %s: %s", *schedule, err)
+		log.Fatalf("Couldn't get schedule entries for %s: %s", schedule.Name, err)
 	}
 
 	workers := make(map[string]worker)
@@ -235,13 +243,13 @@ func getUser(pd pagerduty.PagerDuty, id string) worker {
 	}
 }
 
-func listSchedules(pd pagerduty.PagerDuty) {
-	schedules, err := pd.GetSchedules()
+func listEscalationPolicies(pd pagerduty.PagerDuty) {
+	policies, err := pd.GetEscalationPolicies()
 	if err != nil {
-		log.Fatalf("Couldn't get Schedules: %s", err)
+		log.Fatalf("Couldn't get policies: %s", err)
 	}
 
-	for _, schedule := range schedules {
-		log.Printf("%s: %s", schedule.Id, schedule.Name)
+	for _, policy := range *policies {
+		fmt.Printf("- %s %s\n", policy.Id, policy.Name)
 	}
 }

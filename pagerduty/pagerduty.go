@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -29,8 +30,8 @@ type Schedule struct {
 }
 
 type Schedules struct {
-	Schedules []Schedule `json:"schedules"`
 	Common
+	Schedules []Schedule `json:"schedules"`
 }
 
 type ScheduleDetails struct {
@@ -72,6 +73,36 @@ type Incident struct {
 		Name string `json:"name"`
 		Id   string `json:"id"`
 	} `json:"escalation_policy"`
+}
+
+type Service struct {
+	Name string `json:"name"`
+	Id   string `json:"id"`
+}
+
+type EscalationRules struct {
+	Id     string `json:"id"`
+	Object struct {
+		Name string `json:"name"`
+		Id   string `json:"id"`
+	} `json:"rule_object"`
+}
+
+type EscalationPolicy struct {
+	Common
+	Policy EscalationPolicyDetail `json:"escalation_policy"`
+}
+
+type EscalationPolicies struct {
+	Common
+	Policies []EscalationPolicyDetail `json:"escalation_policies"`
+}
+
+type EscalationPolicyDetail struct {
+	Id       string            `json:"id"`
+	Name     string            `json:"name"`
+	Services []Service         `json:"services"`
+	Rules    []EscalationRules `json:"escalation_rules"`
 }
 
 type PagerDuty struct {
@@ -170,7 +201,7 @@ func (pd *PagerDuty) GetScheduleEntries(id string, since time.Time, until time.T
 	return pdsd.Schedule.FinalSchedule.ScheduleEntries, err
 }
 
-func (pd *PagerDuty) GetIncidents(since time.Time, until time.Time) (*[]Incident, error) {
+func (pd *PagerDuty) GetIncidents(since time.Time, until time.Time, services []string) (*[]Incident, error) {
 	incidents := []Incident{}
 	offset := 0
 	limit := 100
@@ -181,8 +212,11 @@ func (pd *PagerDuty) GetIncidents(since time.Time, until time.Time) (*[]Incident
 	params.Set("until", until.Format(dateLayout))
 	params.Set("limit", strconv.Itoa(limit))
 
+	if len(services) > 0 {
+		params.Set("service", strings.Join(services, "."))
+	}
+
 	for offset+limit <= total {
-		// log.Printf("offset: %d, limit: %d, total: %d", offset, limit, total)
 		params.Set("offset", strconv.Itoa(offset))
 		body, err := pd.getBody("incidents", params)
 		if err != nil {
@@ -198,4 +232,36 @@ func (pd *PagerDuty) GetIncidents(since time.Time, until time.Time) (*[]Incident
 		total = incs.Total
 	}
 	return &incidents, nil
+}
+
+func (pd *PagerDuty) GetEscalationPolicies() (*[]EscalationPolicyDetail, error) {
+	body, err := pd.getBody("escalation_policies", url.Values{})
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't request schedules: %s", err)
+	}
+
+	policies := EscalationPolicies{}
+	if err := json.Unmarshal(body, &policies); err != nil {
+		return nil, fmt.Errorf("Couldn't unmarshal response: %s", err)
+	}
+
+	if policies.Total >= policies.Limit {
+		return nil, fmt.Errorf("Pagination not yet supported but necessary since total entries (%d) > limit (  %d)", policies.Total, policies.Limit)
+	}
+
+	return &policies.Policies, nil
+}
+
+func (pd *PagerDuty) GetEscalationPolicy(id string) (*EscalationPolicyDetail, error) {
+	body, err := pd.getBody(fmt.Sprintf("escalation_policies/%s", id), url.Values{})
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't request schedules: %s", err)
+	}
+
+	policy := EscalationPolicy{}
+	if err := json.Unmarshal(body, &policy); err != nil {
+		return nil, fmt.Errorf("Couldn't unmarshal response: %s", err)
+	}
+
+	return &policy.Policy, nil
 }
