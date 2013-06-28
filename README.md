@@ -1,7 +1,10 @@
 pager-hours
 ===========
 
-This tool exports how many hours each user on given pagerduty schedules was on call.
+For a given escalation policy, this tool exports:
+- for the main schedule, how many hours each user was on call
+- for services using that escalation policy _primarly_, how many incidents each user received (see known issues)
+
 
 If you want to compensate on call duty, you often need to track hours on call during the weekday outside office hours, weekends and holidays.
 This tool helps with that.
@@ -31,3 +34,4 @@ This tool has a lot of limitations and assumptions.
 
 - The underlying libraries (holidays and pagerduty) are very limited and only support what we're using here
 - Therefor generalizing this tool makes only sense after supporting more regions in the holidays library.
+- The incident count reflects how many incidents a user received and ignoring whether the incident was escalated and actually handled by someone else.
