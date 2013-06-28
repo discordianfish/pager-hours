@@ -3,49 +3,68 @@ package main
 import (
 	"encoding/csv"
 	"flag"
+	"fmt"
 	"github.com/discordianfish/pager-hours/holidays"
 	"github.com/discordianfish/pager-hours/pagerduty"
 	"log"
 	"os"
-	"regexp"
 	"strconv"
 	"time"
 )
 
 var (
-	month     = beginningOfMonth(time.Now())
-	token     = flag.String("token", "", "PagerDuty token.")
-	domain    = flag.String("domain", "", "PagerDuty subdomain/organization.")
-	from      = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
-	to        = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
-	fromTime  time.Time
-	toTime    time.Time
-	workers   map[string]worker
-	officeTZ  map[string]holidays.Region
-	matchTier = regexp.MustCompile("tier=([0-9]*)")
+	month    = beginningOfMonth(time.Now())
+	token    = flag.String("token", "", "PagerDuty token.")
+	domain   = flag.String("domain", "", "PagerDuty subdomain/organization.")
+	from     = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
+	to       = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
+	policyId = flag.String("policy", "", "Escalation policy to get on call hours and incidents from")
+	fromTime time.Time
+	toTime   time.Time
+	officeTZ map[string]holidays.Region
+
+	csvHeaders = []string{
+		"Date",
+		"User",
+		"Time Zone",
+		"Location",
+		"Type",
+		"Hours On-Call",
+		"Incidents/Day",
+		"Incidents/Night",
+		"Additional Hours/Day",
+		"Additional Hours/Night",
+	}
 )
 
 const (
-	shortDate   = "2006-01-02"
-	weekday     = "weekday"
-	saturday    = "saturday"
-	sunday      = "sunday"
-	holiday     = "holiday"
+	shortDate = "2006-01-02"
+
+	weekday  = "weekday"
+	saturday = "saturday"
+	sunday   = "sunday"
+	holiday  = "holiday"
+
 	office      = "officehours"
 	officeStart = 10
 	officeEnd   = 18
-)
 
-type workload struct {
-	tier  int
-	hours int
-}
+	day        = "day"
+	night      = "night"
+	nightStart = 0
+	nightEnd   = 8
+)
 
 type worker struct {
 	email    string
-	workload map[string]workload
 	location *time.Location
 	region   holidays.Region
+}
+
+type workload struct {
+	oncall         int
+	incidents      int
+	incidentsNight int
 }
 
 func init() {
@@ -65,7 +84,6 @@ func init() {
 		log.Fatalf("Please provide a valid end date (format: %s)", shortDate)
 	}
 
-	workers = make(map[string]worker)
 	officeTZ = map[string]holidays.Region{
 		"Berlin": holidays.Berlin,
 		"Sofia":  holidays.Bulgaria,
@@ -99,80 +117,139 @@ func bucketFor(t time.Time, user worker) string {
 
 func main() {
 	pd := pagerduty.New(*domain, *token)
-	schedules, err := pd.GetSchedules()
-	if err != nil {
-		log.Fatalf("Couldn't get Schedules: %s", err)
+	if *policyId == "" {
+		fmt.Println("No policy (-policy=abc) specified, available policies:")
+		listEscalationPolicies(pd)
+		os.Exit(0)
 	}
 
-	log.Printf("Calculating pagerduty hours between %s and %s", *from, *to)
+	policy, err := pd.GetEscalationPolicy(*policyId)
+	if err != nil {
+		log.Fatalf("Couldn't get escalation policy: %s", err)
+	}
+	log.Printf("Calculating hours for %s between %s and %s", policy.Name, *from, *to)
+	schedule := policy.Rules[0].Object // TODO: Verify this is sorted right
+	log.Printf("- Using schedule %s", schedule.Name)
 
-	for _, schedule := range schedules {
-		matches := matchTier.FindStringSubmatch(schedule.Name)
-		if len(matches) != 2 { // 0: matched string, 1: capture
+	serviceIds := []string{}
+	for _, service := range policy.Services {
+		log.Printf("-- service %s", service.Name)
+		serviceIds = append(serviceIds, service.Id)
+	}
+
+	log.Println("- Getting all incidents for services")
+	incidents, err := pd.GetIncidents(fromTime, toTime, serviceIds)
+	if err != nil {
+		log.Fatalf("Couldn't get incidents: %s", err)
+	}
+
+	incidentMap := map[string]map[int][]pagerduty.Incident{}
+	for _, incident := range *incidents {
+		if incident.EscalationPolicy.Id != *policyId {
 			continue
 		}
-		log.Printf("Using %s.", schedule.Name)
-		tier, err := strconv.Atoi(matches[1])
-		if err != nil {
-			log.Printf("Skipping %s because tier '%s' is not a number.", schedule.Name, matches[1])
+		c := incident.CreatedOn
+		if _, ok := incidentMap[c.Format(shortDate)]; !ok {
+			incidentMap[c.Format(shortDate)] = map[int][]pagerduty.Incident{}
 		}
-		entries, err := pd.GetScheduleEntries(schedule.Id, fromTime, toTime)
-		if err != nil {
-			log.Fatalf("Couldn't get schedule entries for %s: %s", schedule.Id, err)
-		}
-		for _, entry := range entries {
-			current := entry.Start
-			for current.Before(entry.End) {
-				if _, ok := workers[entry.User.Email]; !ok {
-					puser, err := pd.GetUser(entry.User.Id)
-					if err != nil {
-						log.Fatalf("Couldn't get user %s: %s", entry.User.Id, err)
-					}
-					region, ok := officeTZ[puser.TimeZone]
-					if !ok {
-						log.Fatalf("No office in %s known", puser.TimeZone)
-					}
-
-					workers[entry.User.Email] = worker{
-						email:    puser.Email,
-						location: puser.Location,
-						region:   region,
-						workload: make(map[string]workload),
-					}
-				}
-
-				user := workers[entry.User.Email]
-				currentLocal := current.In(user.location) // local time for the user working that hour
-				bucket := bucketFor(currentLocal, user)
-				if _, ok := user.workload[bucket]; !ok {
-					user.workload[bucket] = workload{tier: tier}
-				}
-				// TODO: Fixme, use correct tier
-				user.workload[bucket] = workload{tier: 1, hours: workers[entry.User.Email].workload[bucket].hours + 1}
-				current = current.Add(1 * time.Hour)
-			}
-		}
+		incidentMap[c.Format(shortDate)][c.Hour()] = append(incidentMap[c.Format(shortDate)][c.Hour()], incident)
 	}
+
+	log.Println("- Getting entries for schedule")
+	entries, err := pd.GetScheduleEntries(schedule.Id, fromTime, toTime)
+	if err != nil {
+		log.Fatalf("Couldn't get schedule entries for %s: %s", schedule.Name, err)
+	}
+
+	workers := make(map[string]worker)
 	csvw := csv.NewWriter(os.Stdout)
-	csvw.Write([]string{
-		"Email",
-		"Time zone",
-		"Office location",
-		"Weekday hours",
-		"Saturday hours",
-		"Sunday hours",
-		"Holiday hours",
-	})
-	for _, worker := range workers {
-		csvw.Write([]string{
-			worker.email,
-			worker.location.String(),
-			string(worker.region),
-			strconv.Itoa(worker.workload[weekday].hours),
-			strconv.Itoa(worker.workload[saturday].hours),
-			strconv.Itoa(worker.workload[sunday].hours),
-			strconv.Itoa(worker.workload[holiday].hours),
-		})
+	csvw.Write(csvHeaders)
+
+	day := map[worker]map[string]workload{}
+	// work := map[worker]map[string]map[string]int{}
+
+	for _, entry := range entries {
+		current := entry.Start
+		for current.Before(entry.End) {
+			email := entry.User.Email
+			if _, ok := workers[email]; !ok {
+				workers[email] = getUser(pd, entry.User.Id)
+			}
+
+			user := workers[email]
+			if _, ok := day[user]; !ok {
+				day[user] = map[string]workload{}
+			}
+
+			currentLocal := current.In(user.location) // local time for the user working that hour
+			bucket := bucketFor(currentLocal, user)
+
+			work := day[user][bucket]
+			work.oncall++
+
+			incidents := incidentMap[current.Format(shortDate)][current.Hour()]
+
+			if len(incidents) > 0 {
+				if current.Hour() >= nightStart && current.Hour() < nightEnd {
+					work.incidentsNight++
+				} else {
+					work.incidents++
+				}
+			}
+			day[user][bucket] = work
+
+			next := current.Add(1 * time.Hour)
+			if next.Day() != current.Day() {
+				for user, buckets := range day {
+					for bucket, work := range buckets {
+						if work.oncall == 0 && work.incidents == 0 && work.incidentsNight == 0 {
+							continue
+						}
+						csvw.Write([]string{
+							current.Format(shortDate),
+							user.email,
+							user.location.String(),
+							string(user.region),
+							bucket,
+							strconv.Itoa(work.oncall),
+							strconv.Itoa(work.incidents),
+							strconv.Itoa(work.incidentsNight),
+							"0", "0",
+						})
+						csvw.Flush()
+						day[user][bucket] = workload{}
+					}
+				}
+			}
+			current = next
+		}
 	}
-	csvw.Flush()
+}
+
+func getUser(pd pagerduty.PagerDuty, id string) worker {
+	puser, err := pd.GetUser(id)
+	if err != nil {
+		log.Fatalf("Couldn't get user %s: %s", id, err)
+	}
+	region, ok := officeTZ[puser.TimeZone]
+	if !ok {
+		log.Fatalf("No office in %s known", puser.TimeZone)
+	}
+
+	return worker{
+		email:    puser.Email,
+		location: puser.Location,
+		region:   region,
+	}
+}
+
+func listEscalationPolicies(pd pagerduty.PagerDuty) {
+	policies, err := pd.GetEscalationPolicies()
+	if err != nil {
+		log.Fatalf("Couldn't get policies: %s", err)
+	}
+
+	for _, policy := range *policies {
+		fmt.Printf("- %s %s\n", policy.Id, policy.Name)
+	}
 }
