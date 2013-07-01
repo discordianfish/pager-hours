@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/csv"
 	"flag"
 	"fmt"
 	"github.com/discordianfish/pager-hours/holidays"
 	"github.com/discordianfish/pager-hours/pagerduty"
+	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -162,7 +164,9 @@ func main() {
 	}
 
 	workers := make(map[string]worker)
-	csvw := csv.NewWriter(os.Stdout)
+	file := &bytes.Buffer{}
+
+	csvw := csv.NewWriter(file)
 	csvw.Write(csvHeaders)
 
 	day := map[worker]map[string]workload{}
@@ -224,6 +228,11 @@ func main() {
 			current = next
 		}
 	}
+	content, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatalf("Couldn't read generated csv: %s", err)
+	}
+	fmt.Printf("%s", content)
 }
 
 func getUser(pd pagerduty.PagerDuty, id string) worker {
