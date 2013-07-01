@@ -105,12 +105,12 @@ type EscalationPolicyDetail struct {
 	Rules    []EscalationRules `json:"escalation_rules"`
 }
 
-type PagerDuty struct {
+type Client struct {
 	token string
 	url   string
 }
 
-func New(domain string, token string) (pd PagerDuty) {
+func New(domain string, token string) (pd Client) {
 	pd.token = token
 	pd.url = fmt.Sprintf(apiUrl, domain)
 
@@ -118,7 +118,7 @@ func New(domain string, token string) (pd PagerDuty) {
 }
 
 //FIXME: pagination
-func (pd *PagerDuty) getBody(path string, params url.Values) (body []byte, err error) {
+func (pd *Client) getBody(path string, params url.Values) (body []byte, err error) {
 	url := fmt.Sprintf("%s/%s?%s", pd.url, path, params.Encode())
 	client := &http.Client{}
 
@@ -143,7 +143,7 @@ func (pd *PagerDuty) getBody(path string, params url.Values) (body []byte, err e
 	return body, err
 }
 
-func (pd *PagerDuty) GetUser(id string) (UserDetails, error) {
+func (pd *Client) GetUser(id string) (UserDetails, error) {
 	body, err := pd.getBody(fmt.Sprintf("users/%s", id), url.Values{})
 	if err != nil {
 		return UserDetails{}, fmt.Errorf("Couldn't request user: %s", err)
@@ -167,7 +167,7 @@ func (pd *PagerDuty) GetUser(id string) (UserDetails, error) {
 	return user, nil
 }
 
-func (pd *PagerDuty) GetSchedules() ([]Schedule, error) {
+func (pd *Client) GetSchedules() ([]Schedule, error) {
 	body, err := pd.getBody("schedules", url.Values{})
 	if err != nil {
 		return []Schedule{}, fmt.Errorf("Couldn't request schedules: %s", err)
@@ -183,7 +183,7 @@ func (pd *PagerDuty) GetSchedules() ([]Schedule, error) {
 	return pds.Schedules, err
 }
 
-func (pd *PagerDuty) GetScheduleEntries(id string, since time.Time, until time.Time) ([]ScheduleEntries, error) {
+func (pd *Client) GetScheduleEntries(id string, since time.Time, until time.Time) ([]ScheduleEntries, error) {
 	params := url.Values{}
 	params.Set("since", since.Format(dateLayout))
 	params.Set("until", until.Format(dateLayout))
@@ -201,7 +201,7 @@ func (pd *PagerDuty) GetScheduleEntries(id string, since time.Time, until time.T
 	return pdsd.Schedule.FinalSchedule.ScheduleEntries, err
 }
 
-func (pd *PagerDuty) GetIncidents(since time.Time, until time.Time, services []string) (*[]Incident, error) {
+func (pd *Client) GetIncidents(since time.Time, until time.Time, services []string) (*[]Incident, error) {
 	incidents := []Incident{}
 	offset := 0
 	limit := 100
@@ -234,7 +234,7 @@ func (pd *PagerDuty) GetIncidents(since time.Time, until time.Time, services []s
 	return &incidents, nil
 }
 
-func (pd *PagerDuty) GetEscalationPolicies() (*[]EscalationPolicyDetail, error) {
+func (pd *Client) GetEscalationPolicies() (*[]EscalationPolicyDetail, error) {
 	body, err := pd.getBody("escalation_policies", url.Values{})
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't request schedules: %s", err)
@@ -252,7 +252,7 @@ func (pd *PagerDuty) GetEscalationPolicies() (*[]EscalationPolicyDetail, error) 
 	return &policies.Policies, nil
 }
 
-func (pd *PagerDuty) GetEscalationPolicy(id string) (*EscalationPolicyDetail, error) {
+func (pd *Client) GetEscalationPolicy(id string) (*EscalationPolicyDetail, error) {
 	body, err := pd.getBody(fmt.Sprintf("escalation_policies/%s", id), url.Values{})
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't request schedules: %s", err)
