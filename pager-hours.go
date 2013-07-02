@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/csv"
 	"flag"
-	"io"
 	"fmt"
+	"github.com/discordianfish/pager-hours/gdrive"
 	"github.com/discordianfish/pager-hours/holidays"
 	"github.com/discordianfish/pager-hours/pagerduty"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -34,13 +35,17 @@ const (
 )
 
 var (
-	month      = beginningOfMonth(time.Now())
-	token      = flag.String("token", "", "PagerDuty token.")
-	domain     = flag.String("domain", "", "PagerDuty subdomain/organization.")
-	from       = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
-	to         = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
-	policyId   = flag.String("policy", "", "Escalation policy to get on call hours and incidents from")
-	csvHeaders = []string{
+	month         = beginningOfMonth(time.Now())
+	token         = flag.String("pd.token", "", "PagerDuty token.")
+	domain        = flag.String("domain", "", "PagerDuty subdomain/organization.")
+	from          = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
+	to            = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
+	policyId      = flag.String("policy", "", "Escalation policy to get on call hours and incidents from")
+	gRefreshToken = flag.String("gdrive.token", "", "Google Drive oauth refresh token.")
+	clientSecret  = flag.String("gdrive.secret", "", "Google Drive client secret.")
+	gCode         = flag.String("gdrive.code", "", "Google Drive auth code (only needed for new token).")
+	directory     = flag.String("gdrive.directory", "On-Call Hours", "Google Drive directory name where to store spreadsheets.")
+	csvHeaders    = []string{
 		"Date",
 		"User",
 		"Time Zone",
@@ -103,6 +108,7 @@ type pagerHours struct {
 	incidents map[string]map[int][]pagerduty.Incident
 	entries   []pagerduty.ScheduleEntries
 	pd        pagerduty.Client
+	policy    *pagerduty.EscalationPolicyDetail
 }
 
 func New(officeTZ map[string]holidays.Region) *pagerHours {
@@ -112,17 +118,25 @@ func New(officeTZ map[string]holidays.Region) *pagerHours {
 	}
 }
 
-func (p *pagerHours) getHours(policyId string, from, to time.Time) error {
+func (p *pagerHours) setPolicy(policyId string) error {
 	policy, err := p.pd.GetEscalationPolicy(policyId)
 	if err != nil {
 		return fmt.Errorf("Couldn't get escalation policy: %s", err)
 	}
-	log.Printf("Calculating hours for %s between %s and %s", policy.Name, from, to)
-	schedule := policy.Rules[0].Object // TODO: Verify this is sorted right
+	p.policy = policy
+	return nil
+}
+
+func (p *pagerHours) getHours(from, to time.Time) error {
+	if p.policy == nil {
+		return fmt.Errorf("No policy set, use setPolicy(policyId) first!")
+	}
+	log.Printf("Calculating hours for %s between %s and %s", p.policy.Name, from, to)
+	schedule := p.policy.Rules[0].Object // TODO: Verify this is sorted right
 	log.Printf("- Using schedule %s", schedule.Name)
 
 	serviceIds := []string{}
-	for _, service := range policy.Services {
+	for _, service := range p.policy.Services {
 		log.Printf("-- service %s", service.Name)
 		serviceIds = append(serviceIds, service.Id)
 	}
@@ -135,7 +149,7 @@ func (p *pagerHours) getHours(policyId string, from, to time.Time) error {
 
 	incidentMap := map[string]map[int][]pagerduty.Incident{}
 	for _, incident := range *incidents {
-		if incident.EscalationPolicy.Id != policyId {
+		if incident.EscalationPolicy.Id != p.policy.Id {
 			continue
 		}
 		c := incident.CreatedOn
@@ -251,20 +265,9 @@ func (p *pagerHours) getUser(id string) worker {
 }
 
 func main() {
-	officeTZ := map[string]holidays.Region{
-		"Berlin": holidays.Berlin,
-		"Sofia":  holidays.Bulgaria,
-		"Pacific Time (US & Canada)": holidays.California,
+	if *directory == "" {
+		log.Fatalf("Please specify gdrive.directory!")
 	}
-
-	p := New(officeTZ)
-	if *policyId == "" {
-		fmt.Println("No policy (-policy=abc) specified, available policies:")
-		p.listEscalationPolicies()
-		os.Exit(0)
-	}
-
-
 	fromTime, err := time.Parse(shortDate, *from)
 	if err != nil {
 		log.Fatalf("Please provide a valid start date (format: %s)", shortDate)
@@ -275,12 +278,50 @@ func main() {
 		log.Fatalf("Please provide a valid end date (format: %s)", shortDate)
 	}
 
-	if err := p.getHours(*policyId, fromTime, toTime); err != nil {
+	gd, err := gdrive.New(*clientSecret, *gRefreshToken, *gCode)
+	if err != nil {
+		log.Fatalf("Couldn't instantiate drive: %s", err)
+	}
+
+	officeTZ := map[string]holidays.Region{
+		"Berlin": holidays.Berlin,
+		"Sofia":  holidays.Bulgaria,
+		"Pacific Time (US & Canada)": holidays.California,
+	}
+
+	p := New(officeTZ)
+
+	if *policyId == "" {
+		fmt.Println("No policy (-policy=abc) specified, available policies:")
+		p.listEscalationPolicies()
+		os.Exit(0)
+	}
+	if err := p.setPolicy(*policyId); err != nil {
+		log.Fatalf("Couldn't set policy: %s", err)
+	}
+
+	if err := p.getHours(fromTime, toTime); err != nil {
 		log.Fatalf("Couldn't get hours for policy %s: ", err)
 	}
 
 	file := &bytes.Buffer{}
 	p.writeFile(file)
+
+	log.Printf("Exporting to Google Drive")
+
+	root, err := gd.GetOrCreateDirectory(*directory, "root")
+	if err != nil {
+		log.Fatalf("Couldn't neither find nor create directory '%s': %s", *directory, err)
+	}
+	log.Printf("- Root Directory %s(%s)", root.Title, root.Id)
+
+	parent, err := gd.GetOrCreateDirectory(p.policy.Name, root.Id)
+	if err != nil {
+		log.Fatalf("Couldn't neither find nor create directory '%s' in '%s': %s", p.policy.Name, root.Title, err)
+	}
+	log.Printf("- Policy Directory %s/%s", root.Title, parent.Title)
+
+	gd.Upload(file, parent.Id, fmt.Sprintf("%s - %s.csv", fromTime.Format(shortDate), toTime.Format(shortDate)))
 
 	content, err := ioutil.ReadAll(file)
 	if err != nil {
