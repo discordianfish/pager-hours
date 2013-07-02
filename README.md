@@ -4,6 +4,7 @@ pager-hours
 For a given escalation policy, this tool exports:
 - for the main schedule, how many hours each user was on call
 - for services using that escalation policy _primarly_, how many incidents each user received (see known issues)
+- exports this data to google drive
 
 
 If you want to compensate on call duty, you often need to track hours on call during the weekday outside office hours, weekends and holidays.
