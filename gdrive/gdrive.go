@@ -47,8 +47,6 @@ func New(secret, refreshToken, code string) (*gdrive, error) {
 	if refreshToken != "" {
 		d.transport.Token = &oauth.Token{RefreshToken: refreshToken}
 		d.transport.Refresh()
-		log.Printf("New token! Access: '%s', Refresh: '%s', Expires: %s",
-			d.transport.Token.AccessToken, d.transport.Token.RefreshToken, d.transport.Token.Expiry)
 		return d, nil
 	}
 
