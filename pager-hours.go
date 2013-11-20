@@ -176,7 +176,6 @@ func (p *pagerHours) writeFile(file io.ReadWriter) {
 	csvw.Write(csvHeaders)
 
 	day := map[worker]map[string]workload{}
-	// work := map[worker]map[string]map[string]int{}
 
 	for _, entry := range p.entries {
 		current := entry.Start
