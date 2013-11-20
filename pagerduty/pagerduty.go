@@ -213,7 +213,7 @@ func (pd *Client) GetIncidents(since time.Time, until time.Time, services []stri
 	params.Set("limit", strconv.Itoa(limit))
 
 	if len(services) > 0 {
-		params.Set("service", strings.Join(services, "."))
+		params.Set("service", strings.Join(services, ","))
 	}
 
 	for offset+limit <= total {
