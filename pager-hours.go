@@ -37,7 +37,7 @@ const (
 var (
 	month         = beginningOfMonth(time.Now())
 	token         = flag.String("pd.token", "", "PagerDuty token.")
-	domain        = flag.String("domain", "", "PagerDuty subdomain/organization.")
+	domain        = flag.String("pd.domain", "", "PagerDuty subdomain/organization.")
 	from          = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
 	to            = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
 	policyId      = flag.String("policy", "", "Escalation policy to get on call hours and incidents from")
@@ -75,7 +75,7 @@ func init() {
 	flag.Parse()
 
 	if *token == "" || *domain == "" {
-		log.Fatalf("pager-hours -token=<your-token> -domain=<subdomain/organization>")
+		log.Fatalf("pager-hours -pd.token=<your-token> -pd.domain=<subdomain/organization>")
 	}
 }
 
