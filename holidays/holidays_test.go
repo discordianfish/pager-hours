@@ -3,11 +3,12 @@ package holidays_test
 import (
 	"encoding/csv"
 	"fmt"
-	"github.com/discordianfish/pager-hours/holidays"
 	"io"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/soundcloud/pager-hours/holidays"
 )
 
 func TestHolidayAllBerlin(t *testing.T) {
