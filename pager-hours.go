@@ -5,15 +5,16 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"github.com/discordianfish/pager-hours/gdrive"
-	"github.com/discordianfish/pager-hours/holidays"
-	"github.com/discordianfish/pager-hours/pagerduty"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/discordianfish/pager-hours/gdrive"
+	"github.com/discordianfish/pager-hours/holidays"
+	"github.com/discordianfish/pager-hours/pagerduty"
 )
 
 const (
@@ -69,14 +70,6 @@ type workload struct {
 	oncall         int
 	incidents      int
 	incidentsNight int
-}
-
-func init() {
-	flag.Parse()
-
-	if *token == "" || *domain == "" {
-		log.Fatalf("pager-hours -pd.token=<your-token> -pd.domain=<subdomain/organization>")
-	}
 }
 
 func beginningOfMonth(t time.Time) time.Time {
@@ -264,6 +257,12 @@ func (p *pagerHours) getUser(id string) worker {
 }
 
 func main() {
+	flag.Parse()
+
+	if *token == "" || *domain == "" {
+		log.Fatalf("pager-hours -pd.token=<your-token> -pd.domain=<subdomain/organization>")
+	}
+
 	if *directory == "" {
 		log.Fatalf("Please specify gdrive.directory!")
 	}
