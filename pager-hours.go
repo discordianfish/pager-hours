@@ -195,7 +195,7 @@ func (p *pagerHours) writeFile(file io.ReadWriter) {
 			incidents := p.incidents[current.Format(shortDate)][current.Hour()]
 
 			if len(incidents) > 0 {
-				if current.Hour() >= nightStart && current.Hour() < nightEnd {
+				if currentLocal.Hour() >= nightStart && currentLocal.Hour() < nightEnd {
 					work.incidentsNight++
 				} else {
 					work.incidents++
