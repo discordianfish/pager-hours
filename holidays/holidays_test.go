@@ -25,6 +25,13 @@ func TestHolidayAllCalifornia(t *testing.T) {
 	}
 }
 
+func TestHolidayAllNewYork(t *testing.T) {
+	if err := compareToFixtures(holidays.NewYork, "test/fixtures/holidays_new_york.csv"); err != nil {
+		t.Logf("Failed: %s", err)
+		t.FailNow()
+	}
+}
+
 func TestHolidayAllBulgaria(t *testing.T) {
 	if err := compareToFixtures(holidays.Bulgaria, "test/fixtures/holidays_bulgaria.csv"); err != nil {
 		t.Logf("Failed: %s", err)

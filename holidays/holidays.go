@@ -12,6 +12,7 @@ const (
 	Berlin     Region = "Berlin"
 	Bulgaria   Region = "Bulgaria"
 	California Region = "California"
+	NewYork    Region = "New York"
 )
 
 var (
@@ -39,7 +40,9 @@ func Holiday(t time.Time, r Region) (holiday, error) {
 	case Bulgaria:
 		return holidayBulgaria(day)
 	case California:
-		return holidayCalifornia(day)
+		return holidayUSA(day)
+	case NewYork:
+		return holidayUSA(day)
 	}
 	return holiday{}, errors.New("Region not supported")
 }
@@ -92,7 +95,7 @@ func holidayBerlin(t time.Time) (holiday, error) {
 	return holiday{}, NoHoliday
 }
 
-func holidayCalifornia(t time.Time) (holiday, error) {
+func holidayUSA(t time.Time) (holiday, error) {
 	// US-wide
 	if t.Day() == 1 && t.Month() == time.January {
 		return holiday{Name: "New Year's Day"}, nil

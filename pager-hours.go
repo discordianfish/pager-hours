@@ -307,6 +307,7 @@ func main() {
 		"Berlin": holidays.Berlin,
 		"Sofia":  holidays.Bulgaria,
 		"Pacific Time (US & Canada)": holidays.California,
+		"Eastern Time (US & Canada)": holidays.NewYork,
 	}
 	p := New(officeTZ)
 
