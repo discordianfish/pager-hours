@@ -101,9 +101,6 @@ func holidayCalifornia(t time.Time) (holiday, error) {
 	if t.Day() == 4 && t.Month() == time.July {
 		return holiday{Name: "Independence Day"}, nil
 	}
-	if t.Day() == 11 && t.Month() == time.November {
-		return holiday{Name: "Veteran's Day"}, nil
-	}
 
 	if t.Day() == 25 && t.Month() == time.December {
 		return holiday{Name: "Christmas Day"}, nil
@@ -117,31 +114,18 @@ func holidayCalifornia(t time.Time) (holiday, error) {
 	if t.Weekday() == time.Thursday && t.Month() == time.November && nthDay(t) == 4 {
 		return holiday{Name: "Thanksgiving Day"}, nil
 	}
+	if t.Weekday() == time.Friday && t.Month() == time.November && nthDay(t.AddDate(0, 0, -1)) == 4 { // "Friday after 4th Thursday in November"
+		return holiday{Name: "Day after Thanksgiving"}, nil
+	}
 
 	if t.Weekday() == time.Monday && t.Month() == time.May && nthDayRev(t) == 1 {
 		return holiday{Name: "Memorial Day"}, nil
-	}
-
-	// California
-	if t.Day() == 31 && t.Month() == time.March {
-		return holiday{Name: "Cesar Chavez Day"}, nil
 	}
 
 	if t.Weekday() == time.Monday && t.Month() == time.January && nthDay(t) == 3 {
 		return holiday{Name: "Martin Luther King Jr. Day"}, nil
 	}
 
-	if t.Weekday() == time.Monday && t.Month() == time.February && nthDay(t) == 3 {
-		return holiday{Name: "President's Day"}, nil
-	}
-
-	if t.Weekday() == time.Monday && t.Month() == time.October && nthDay(t) == 2 {
-		return holiday{Name: "Columbus Day"}, nil
-	}
-
-	if t.Weekday() == time.Friday && t.Month() == time.November && nthDay(t.AddDate(0, 0, -1)) == 4 { // "Friday after 4th Thursday in November"
-		return holiday{Name: "Day after Thanksgiving"}, nil
-	}
 	return holiday{}, NoHoliday
 }
 
