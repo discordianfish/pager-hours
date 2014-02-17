@@ -49,7 +49,7 @@ var (
 )
 
 var (
-	csvHeaders    = []string{
+	csvHeaders = []string{
 		"Date",
 		"User",
 		"Time Zone",
@@ -304,8 +304,9 @@ func main() {
 	}
 
 	officeTZ := map[string]holidays.Region{
-		"Berlin": holidays.Berlin,
-		"Sofia":  holidays.Bulgaria,
+		"Bangkok": holidays.Bangkok,
+		"Berlin":  holidays.Berlin,
+		"Sofia":   holidays.Bulgaria,
 		"Pacific Time (US & Canada)": holidays.California,
 		"Eastern Time (US & Canada)": holidays.NewYork,
 	}

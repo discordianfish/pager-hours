@@ -9,6 +9,7 @@ import (
 type Region string
 
 const (
+	Bangkok    Region = "Bangkok"
 	Berlin     Region = "Berlin"
 	Bulgaria   Region = "Bulgaria"
 	California Region = "California"
@@ -35,6 +36,8 @@ func Holiday(t time.Time, r Region) (holiday, error) {
 	day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 
 	switch r {
+	case Bangkok:
+		return holidayBangkok(day)
 	case Berlin:
 		return holidayBerlin(day)
 	case Bulgaria:
@@ -45,6 +48,10 @@ func Holiday(t time.Time, r Region) (holiday, error) {
 		return holidayUSA(day)
 	}
 	return holiday{}, errors.New("Region not supported")
+}
+
+func holidayBangkok(t time.Time) (holiday, error) {
+	return holiday{}, NoHoliday
 }
 
 func holidayBerlin(t time.Time) (holiday, error) {
