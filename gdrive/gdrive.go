@@ -1,13 +1,14 @@
 package gdrive
 
 import (
-	"code.google.com/p/goauth2/oauth"
-	"code.google.com/p/google-api-go-client/drive/v2"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"strings"
+
+	"code.google.com/p/goauth2/oauth"
+	"code.google.com/p/google-api-go-client/drive/v2"
 )
 
 const (
@@ -74,14 +75,19 @@ func (d *gdrive) Drive() (*drive.Service, error) {
 	return drive.New(d.transport.Client())
 }
 
-func (d *gdrive) Upload(file io.Reader, parentId string, title string) (*drive.File, error) {
+func (d *gdrive) Upload(file io.Reader, title, mimeType, parentId string) (*drive.File, error) {
 	pref := &drive.ParentReference{Id: parentId}
 	gd, err := d.Drive()
 	if err != nil {
 		return nil, err
 	}
 
-	metadata := &drive.File{Title: title, Parents: []*drive.ParentReference{pref}}
+	metadata := &drive.File{
+		Title:    title,
+		MimeType: mimeType,
+		Parents:  []*drive.ParentReference{pref},
+	}
+
 	return gd.Files.Insert(metadata).Convert(true).Media(file).Do()
 }
 

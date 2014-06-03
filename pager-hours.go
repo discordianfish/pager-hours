@@ -283,7 +283,8 @@ func exportGdrive(p *pagerHours, file *bytes.Buffer, fromTime, toTime time.Time)
 	}
 	log.Printf("- Policy Directory %s/%s", root.Title, parent.Title)
 
-	gd.Upload(file, parent.Id, fmt.Sprintf("%s - %s.csv", fromTime.Format(shortDate), toTime.Format(shortDate)))
+	filename := fmt.Sprintf("%s - %s.csv", fromTime.Format(shortDate), toTime.Format(shortDate))
+	gd.Upload(file, filename, "text/csv", parent.Id)
 }
 
 func main() {
