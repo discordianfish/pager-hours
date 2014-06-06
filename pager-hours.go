@@ -5,15 +5,16 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"github.com/discordianfish/pager-hours/gdrive"
-	"github.com/discordianfish/pager-hours/holidays"
-	"github.com/discordianfish/pager-hours/pagerduty"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/soundcloud/pager-hours/gdrive"
+	"github.com/soundcloud/pager-hours/holidays"
+	"github.com/soundcloud/pager-hours/pagerduty"
 )
 
 const (
@@ -37,7 +38,7 @@ const (
 var (
 	month         = beginningOfMonth(time.Now())
 	token         = flag.String("pd.token", "", "PagerDuty token.")
-	domain        = flag.String("domain", "", "PagerDuty subdomain/organization.")
+	domain        = flag.String("pd.domain", "", "PagerDuty subdomain/organization.")
 	from          = flag.String("from", month.AddDate(0, -1, 0).Format(shortDate), "Calculate hours after this date.")
 	to            = flag.String("to", month.Format(shortDate), "Calculate hours before this date.")
 	policyId      = flag.String("policy", "", "Escalation policy to get on call hours and incidents from")
@@ -45,7 +46,10 @@ var (
 	clientSecret  = flag.String("gdrive.secret", "", "Google Drive client secret.")
 	gCode         = flag.String("gdrive.code", "", "Google Drive auth code (only needed for new token).")
 	directory     = flag.String("gdrive.directory", "On-Call Hours", "Google Drive directory name where to store spreadsheets.")
-	csvHeaders    = []string{
+)
+
+var (
+	csvHeaders = []string{
 		"Date",
 		"User",
 		"Time Zone",
@@ -69,14 +73,6 @@ type workload struct {
 	oncall         int
 	incidents      int
 	incidentsNight int
-}
-
-func init() {
-	flag.Parse()
-
-	if *token == "" || *domain == "" {
-		log.Fatalf("pager-hours -token=<your-token> -domain=<subdomain/organization>")
-	}
 }
 
 func beginningOfMonth(t time.Time) time.Time {
@@ -199,7 +195,7 @@ func (p *pagerHours) writeFile(file io.ReadWriter) {
 			incidents := p.incidents[current.Format(shortDate)][current.Hour()]
 
 			if len(incidents) > 0 {
-				if current.Hour() >= nightStart && current.Hour() < nightEnd {
+				if currentLocal.Hour() >= nightStart && currentLocal.Hour() < nightEnd {
 					work.incidentsNight++
 				} else {
 					work.incidents++
@@ -263,10 +259,41 @@ func (p *pagerHours) getUser(id string) worker {
 	}
 }
 
-func main() {
+func exportGdrive(p *pagerHours, file *bytes.Buffer, fromTime, toTime time.Time) {
 	if *directory == "" {
 		log.Fatalf("Please specify gdrive.directory!")
 	}
+
+	gd, err := gdrive.New(*clientSecret, *gRefreshToken, *gCode)
+	if err != nil {
+		log.Fatalf("Couldn't instantiate drive: %s", err)
+	}
+
+	log.Printf("Exporting to Google Drive")
+
+	root, err := gd.GetOrCreateDirectory(*directory, "root")
+	if err != nil {
+		log.Fatalf("Couldn't neither find nor create directory '%s': %s", *directory, err)
+	}
+	log.Printf("- Root Directory %s(%s)", root.Title, root.Id)
+
+	parent, err := gd.GetOrCreateDirectory(p.policy.Name, root.Id)
+	if err != nil {
+		log.Fatalf("Couldn't neither find nor create directory '%s' in '%s': %s", p.policy.Name, root.Title, err)
+	}
+	log.Printf("- Policy Directory %s/%s", root.Title, parent.Title)
+
+	filename := fmt.Sprintf("%s - %s.csv", fromTime.Format(shortDate), toTime.Format(shortDate))
+	gd.Upload(file, filename, "text/csv", parent.Id)
+}
+
+func main() {
+	flag.Parse()
+
+	if *token == "" || *domain == "" {
+		log.Fatalf("pager-hours -pd.token=<your-token> -pd.domain=<subdomain/organization>")
+	}
+
 	fromTime, err := time.Parse(shortDate, *from)
 	if err != nil {
 		log.Fatalf("Please provide a valid start date (format: %s)", shortDate)
@@ -277,17 +304,13 @@ func main() {
 		log.Fatalf("Please provide a valid end date (format: %s)", shortDate)
 	}
 
-	gd, err := gdrive.New(*clientSecret, *gRefreshToken, *gCode)
-	if err != nil {
-		log.Fatalf("Couldn't instantiate drive: %s", err)
-	}
-
 	officeTZ := map[string]holidays.Region{
-		"Berlin": holidays.Berlin,
-		"Sofia":  holidays.Bulgaria,
+		"Bangkok": holidays.Bangkok,
+		"Berlin":  holidays.Berlin,
+		"Sofia":   holidays.Bulgaria,
 		"Pacific Time (US & Canada)": holidays.California,
+		"Eastern Time (US & Canada)": holidays.NewYork,
 	}
-
 	p := New(officeTZ)
 
 	if *policyId == "" {
@@ -306,21 +329,9 @@ func main() {
 	file := &bytes.Buffer{}
 	p.writeFile(file)
 
-	log.Printf("Exporting to Google Drive")
-
-	root, err := gd.GetOrCreateDirectory(*directory, "root")
-	if err != nil {
-		log.Fatalf("Couldn't neither find nor create directory '%s': %s", *directory, err)
+	if *clientSecret != "" || *gRefreshToken != "" || *gCode != "" {
+		exportGdrive(p, file, fromTime, toTime)
 	}
-	log.Printf("- Root Directory %s(%s)", root.Title, root.Id)
-
-	parent, err := gd.GetOrCreateDirectory(p.policy.Name, root.Id)
-	if err != nil {
-		log.Fatalf("Couldn't neither find nor create directory '%s' in '%s': %s", p.policy.Name, root.Title, err)
-	}
-	log.Printf("- Policy Directory %s/%s", root.Title, parent.Title)
-
-	gd.Upload(file, parent.Id, fmt.Sprintf("%s - %s.csv", fromTime.Format(shortDate), toTime.Format(shortDate)))
 
 	content, err := ioutil.ReadAll(file)
 	if err != nil {

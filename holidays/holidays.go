@@ -9,9 +9,11 @@ import (
 type Region string
 
 const (
+	Bangkok    Region = "Bangkok"
 	Berlin     Region = "Berlin"
 	Bulgaria   Region = "Bulgaria"
 	California Region = "California"
+	NewYork    Region = "New York"
 )
 
 var (
@@ -34,14 +36,22 @@ func Holiday(t time.Time, r Region) (holiday, error) {
 	day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 
 	switch r {
+	case Bangkok:
+		return holidayBangkok(day)
 	case Berlin:
 		return holidayBerlin(day)
 	case Bulgaria:
 		return holidayBulgaria(day)
 	case California:
-		return holidayCalifornia(day)
+		return holidayUSA(day)
+	case NewYork:
+		return holidayUSA(day)
 	}
 	return holiday{}, errors.New("Region not supported")
+}
+
+func holidayBangkok(t time.Time) (holiday, error) {
+	return holiday{}, NoHoliday
 }
 
 func holidayBerlin(t time.Time) (holiday, error) {
@@ -92,7 +102,7 @@ func holidayBerlin(t time.Time) (holiday, error) {
 	return holiday{}, NoHoliday
 }
 
-func holidayCalifornia(t time.Time) (holiday, error) {
+func holidayUSA(t time.Time) (holiday, error) {
 	// US-wide
 	if t.Day() == 1 && t.Month() == time.January {
 		return holiday{Name: "New Year's Day"}, nil
@@ -100,9 +110,6 @@ func holidayCalifornia(t time.Time) (holiday, error) {
 
 	if t.Day() == 4 && t.Month() == time.July {
 		return holiday{Name: "Independence Day"}, nil
-	}
-	if t.Day() == 11 && t.Month() == time.November {
-		return holiday{Name: "Veteran's Day"}, nil
 	}
 
 	if t.Day() == 25 && t.Month() == time.December {
@@ -117,31 +124,18 @@ func holidayCalifornia(t time.Time) (holiday, error) {
 	if t.Weekday() == time.Thursday && t.Month() == time.November && nthDay(t) == 4 {
 		return holiday{Name: "Thanksgiving Day"}, nil
 	}
+	if t.Weekday() == time.Friday && t.Month() == time.November && nthDay(t.AddDate(0, 0, -1)) == 4 { // "Friday after 4th Thursday in November"
+		return holiday{Name: "Day after Thanksgiving"}, nil
+	}
 
 	if t.Weekday() == time.Monday && t.Month() == time.May && nthDayRev(t) == 1 {
 		return holiday{Name: "Memorial Day"}, nil
-	}
-
-	// California
-	if t.Day() == 31 && t.Month() == time.March {
-		return holiday{Name: "Cesar Chavez Day"}, nil
 	}
 
 	if t.Weekday() == time.Monday && t.Month() == time.January && nthDay(t) == 3 {
 		return holiday{Name: "Martin Luther King Jr. Day"}, nil
 	}
 
-	if t.Weekday() == time.Monday && t.Month() == time.February && nthDay(t) == 3 {
-		return holiday{Name: "President's Day"}, nil
-	}
-
-	if t.Weekday() == time.Monday && t.Month() == time.October && nthDay(t) == 2 {
-		return holiday{Name: "Columbus Day"}, nil
-	}
-
-	if t.Weekday() == time.Friday && t.Month() == time.November && nthDay(t.AddDate(0, 0, -1)) == 4 { // "Friday after 4th Thursday in November"
-		return holiday{Name: "Day after Thanksgiving"}, nil
-	}
 	return holiday{}, NoHoliday
 }
 

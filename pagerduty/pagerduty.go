@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	apiUrl     = "https://%s.pagerduty.com/api/v1"
-	dateLayout = "02-01-2006"
+	apiUrl       = "https://%s.pagerduty.com/api/v1"
+	dateLayout   = "02-01-2006"
+	defaultLimit = 100
 )
 
 type Common struct {
@@ -117,7 +118,7 @@ func New(domain string, token string) (pd Client) {
 	return pd
 }
 
-//FIXME: pagination
+// FIXME: missing pagination support
 func (pd *Client) getBody(path string, params url.Values) (body []byte, err error) {
 	url := fmt.Sprintf("%s/%s?%s", pd.url, path, params.Encode())
 	client := &http.Client{}
@@ -168,7 +169,11 @@ func (pd *Client) GetUser(id string) (UserDetails, error) {
 }
 
 func (pd *Client) GetSchedules() ([]Schedule, error) {
-	body, err := pd.getBody("schedules", url.Values{})
+	// FIXME: missing pagination support
+	params := url.Values{}
+	params.Set("limit", strconv.Itoa(defaultLimit))
+
+	body, err := pd.getBody("schedules", params)
 	if err != nil {
 		return []Schedule{}, fmt.Errorf("Couldn't request schedules: %s", err)
 	}
@@ -204,7 +209,7 @@ func (pd *Client) GetScheduleEntries(id string, since time.Time, until time.Time
 func (pd *Client) GetIncidents(since time.Time, until time.Time, services []string) (*[]Incident, error) {
 	incidents := []Incident{}
 	offset := 0
-	limit := 100
+	limit := defaultLimit
 	total := limit + 1 // make sure the for condition is true
 
 	params := url.Values{}
@@ -235,7 +240,11 @@ func (pd *Client) GetIncidents(since time.Time, until time.Time, services []stri
 }
 
 func (pd *Client) GetEscalationPolicies() (*[]EscalationPolicyDetail, error) {
-	body, err := pd.getBody("escalation_policies", url.Values{})
+	// FIXME: missing pagination support
+	params := url.Values{}
+	params.Set("limit", strconv.Itoa(defaultLimit))
+
+	body, err := pd.getBody("escalation_policies", params)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't request schedules: %s", err)
 	}
@@ -246,7 +255,7 @@ func (pd *Client) GetEscalationPolicies() (*[]EscalationPolicyDetail, error) {
 	}
 
 	if policies.Total >= policies.Limit {
-		return nil, fmt.Errorf("Pagination not yet supported but necessary since total entries (%d) > limit (  %d)", policies.Total, policies.Limit)
+		return nil, fmt.Errorf("Pagination not yet supported but necessary since total entries (%d) > limit (%d)", policies.Total, policies.Limit)
 	}
 
 	return &policies.Policies, nil

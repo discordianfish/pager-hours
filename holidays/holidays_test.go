@@ -3,11 +3,12 @@ package holidays_test
 import (
 	"encoding/csv"
 	"fmt"
-	"github.com/discordianfish/pager-hours/holidays"
 	"io"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/soundcloud/pager-hours/holidays"
 )
 
 func TestHolidayAllBerlin(t *testing.T) {
@@ -19,6 +20,13 @@ func TestHolidayAllBerlin(t *testing.T) {
 
 func TestHolidayAllCalifornia(t *testing.T) {
 	if err := compareToFixtures(holidays.California, "test/fixtures/holidays_california.csv"); err != nil {
+		t.Logf("Failed: %s", err)
+		t.FailNow()
+	}
+}
+
+func TestHolidayAllNewYork(t *testing.T) {
+	if err := compareToFixtures(holidays.NewYork, "test/fixtures/holidays_new_york.csv"); err != nil {
 		t.Logf("Failed: %s", err)
 		t.FailNow()
 	}
