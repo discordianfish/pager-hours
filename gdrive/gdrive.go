@@ -7,8 +7,8 @@ import (
 	"log"
 	"strings"
 
-	"code.google.com/p/goauth2/oauth"
-	"code.google.com/p/google-api-go-client/drive/v2"
+	"github.com/bbirec/goauth2/oauth"
+	"google.golang.org/api/drive/v2"
 )
 
 const (

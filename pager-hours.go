@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/soundcloud/pager-hours/gdrive"
-	"github.com/soundcloud/pager-hours/holidays"
-	"github.com/soundcloud/pager-hours/pagerduty"
+	"github.com/discordianfish/pager-hours/gdrive"
+	"github.com/discordianfish/pager-hours/holidays"
+	"github.com/discordianfish/pager-hours/pagerduty"
 )
 
 const (
@@ -305,9 +305,9 @@ func main() {
 	}
 
 	officeTZ := map[string]holidays.Region{
-		"Bangkok": holidays.Bangkok,
-		"Berlin":  holidays.Berlin,
-		"Sofia":   holidays.Bulgaria,
+		"Bangkok":                    holidays.Bangkok,
+		"Berlin":                     holidays.Berlin,
+		"Sofia":                      holidays.Bulgaria,
 		"Pacific Time (US & Canada)": holidays.California,
 		"Eastern Time (US & Canada)": holidays.NewYork,
 	}

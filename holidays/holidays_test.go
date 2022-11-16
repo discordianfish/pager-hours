@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/soundcloud/pager-hours/holidays"
+	"github.com/discordianfish/pager-hours/holidays"
 )
 
 func TestHolidayAllBerlin(t *testing.T) {

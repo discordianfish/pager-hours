@@ -10,7 +10,7 @@ If you want to compensate on call duty, you often need to track hours on call du
 This tool helps with that.
 
 ## Usage
-
+- `go install ./...` to install
 - Add an API client in pagerduty
 
 ## Sum via Google Spreadsheet
